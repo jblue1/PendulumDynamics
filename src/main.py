@@ -5,12 +5,11 @@ sections.
 """
 import functions as f
 from math import pi
-# from datetime import date
-# import time
-# import os
+from datetime import date
+import os
 import click
 import numpy as np
-# import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 
 g = 9.81
 
@@ -32,7 +31,7 @@ g = 9.81
 def main(img_path, points_per_sec, k, a, l, d, omega, b, m, t_fin, run_number): # noqa
     A = a
     L = l
-    """
+
     today = str(date.today())
     run_number = '_' + str(run_number)
     save_dir = img_path + '/' + today + run_number
@@ -49,28 +48,25 @@ def main(img_path, points_per_sec, k, a, l, d, omega, b, m, t_fin, run_number): 
     else:
         os.makedirs(save_dir)
 
-
-    f.write_param_file(save_dir, args)
-    """
-
     args = (k, A, L, d, omega, b, m)
-    """
+    f.write_param_file(save_dir, args)
+
     xs = []
     xps = []
     ys = []
     yps = []
-    """
-    # count = 0
-    for theta_init in np.linspace(-pi, pi, 5, endpoint=True):
+
+    count = 0
+    for theta_init in np.linspace(-pi, pi, 128, endpoint=True):
         print(theta_init)
-        for theta_dot_init in np.linspace(-3, 3, 5):
-            # count += 1
+        for theta_dot_init in np.linspace(-3, 3, 2):
+            count += 1
             times, x, y = f.solve_system(f.difeqs_param_force_pend,
                                          [theta_init, theta_dot_init],
                                          args,
                                          t_fin,
                                          points_per_sec)
-            """
+
             x = (x + pi) % (2*pi) - pi  # keep all values in range -pi to pi
             x = x[-len(x)//4:]
             y = y[-len(y)//4:]
@@ -90,16 +86,12 @@ def main(img_path, points_per_sec, k, a, l, d, omega, b, m, t_fin, run_number): 
             ax.scatter(xp, yp, s=10)
             plt.savefig(fname)
             plt.close()
-            """
 
-
-"""
     f.plot(xs,
            ys,
            save_dir+'/PhaseSpace',
            labels=['Phase Space A={}'.format(A), 'Theta', 'Theta_dot'],
            high_res=True)
-"""
 
 
 if __name__ == '__main__':
