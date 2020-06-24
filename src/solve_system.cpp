@@ -75,16 +75,24 @@ int main(int argc, char const *argv[]) {
   const double abs_err = 1e-10;
   const double rel_err = 1e-10;
 
-  state_type x(2);
-  x[0] = 1.5;
-  x[1] = 0;
+
   const double dt = 0.01;
 
   std::ofstream write_out("test.csv");
   assert(write_out.is_open());
 
-  integrate_const(make_controlled<error_stepper_type>(abs_err, rel_err), param_forced_pend(A, L, d, omega, b, m, k),
-x, 0.0, 500.0, dt, streaming_observer(write_out));
+  double x0_step = 2*M_PI / 100;
+  double x1_step = 6 / 5;
+  for (size_t i = 0; i < 5; i++) {
+    for (size_t j=0; j < 5; j++) {
+      state_type x(2);
+      x[0] = -M_PI + i*x0_step;
+      x[1] = -3 + j*x1_step;
+      integrate_const(make_controlled<error_stepper_type>(abs_err, rel_err), param_forced_pend(A, L, d, omega, b, m, k),
+      x, 0.0, 500.0, dt);
+    }
+  }
+
 
   write_out.close();
   return 0;
