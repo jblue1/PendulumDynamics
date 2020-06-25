@@ -69,7 +69,7 @@ static void usage(std::ostream &out, const char* msg){
     out << "  file  - name of output file\n";
     out << "  A     - amplitude of pivot oscillations\n";
     out << "  time  - Time to simulate system\n";
-    out << "  1|2   - 1 for 5th order RK and 2 for 8th order\n";
+    out << "  1|2   - 1 for 8th order RK and 2 for 5th order\n";
     out << "  err   - value for absolute and relative error tolerance in the ODE solver\n\n";
     exit(1);
 }
