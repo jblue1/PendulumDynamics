@@ -95,8 +95,9 @@ int main(int argc, char const *argv[]) {
   const double k = 0.2;
   const double abs_err = err;
   const double rel_err = err;
+  const double points_per_sec = 100.0;
 
-  const double dt = 0.01;
+  const double dt = 1/points_per_sec;
   std::ofstream write_out(file);
   assert(write_out.is_open());
 
@@ -104,23 +105,32 @@ int main(int argc, char const *argv[]) {
   x[1] = 1.0;
   x[0] = 1.0;
 
+  const int num_points = lrint(t_fin * points_per_sec);
+
+  std::vector<double> times(num_points );
+  for( size_t i=0 ; i<times.size() ; ++i )
+    times[i] = dt*i;
+
+
 
   if (solver == 1) {
     typedef runge_kutta_fehlberg78<state_type> error_stepper_type;
     error_stepper_type stepper;
-    std::cout << "Using Fehlberg78\n";
-    integrate_const(make_controlled<error_stepper_type>(abs_err, rel_err),
-                    param_forced_pend(A, L, d, omega, b, m, k),x, 0.0, t_fin, dt,
-                    streaming_observer(write_out));
+    std::cout << "Using Fehlberg78\n";\
+
+    integrate_times(make_controlled( abs_err , rel_err , error_stepper_type() ),
+                    param_forced_pend(A, L, d, omega, b, m, k),
+                           x , times , dt , streaming_observer(write_out));                       
     }
 
   else if (solver == 2){
     typedef runge_kutta_cash_karp54<state_type> error_stepper_type;
     error_stepper_type stepper;
     std::cout << "Using Cash-Karp54\n";
-    integrate_const(make_controlled<error_stepper_type>(abs_err, rel_err),
-                    param_forced_pend(A, L, d, omega, b, m, k),x, 0.0, t_fin, dt,
-                    streaming_observer(write_out));
+
+    integrate_times(make_controlled( abs_err , rel_err , error_stepper_type() ),
+                    param_forced_pend(A, L, d, omega, b, m, k),
+                           x , times , dt , streaming_observer(write_out));
   }
 
   else {
