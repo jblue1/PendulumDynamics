@@ -64,51 +64,68 @@ struct streaming_observer {
 
 static void usage(std::ostream &out, const char* msg){
     out << msg << "\n" << "\n";
-    out << "Usage:\n";
-    out << "    solve_system file A\n";
-    out << "file  - name of output file\n";
-    out << "A     - amplitude of pivot oscillations\n";
-    out << "time  - Time to simulate system\n";
+    out << "  Usage:\n";
+    out << "        solve_system file A\n";
+    out << "  file  - name of output file\n";
+    out << "  A     - amplitude of pivot oscillations\n";
+    out << "  time  - Time to simulate system\n";
+    out << "  1|2   - 1 for 5th order RK and 2 for 8th order\n";
+    out << "  err   - value for absolute and relative error tolerance in the ODE solver\n\n";
     exit(1);
 }
 
 
 int main(int argc, char const *argv[]) {
-  std::cout << argc << "\n";
-  if (argc != 4) {
+  if (argc != 6) {
     usage(std::cerr, "Incorrect Number of parameters given.");
   }
 
-  typedef runge_kutta_fehlberg78<state_type> error_stepper_type;
-  error_stepper_type stepper;
+
 
   const char *file = argv[1];
   const double A = atof(argv[2]);
   const double t_fin = atof(argv[3]);
+  const int solver = atoi(argv[4]);
+  const double err = atof(argv[5]);
   const double L = g/pow(M_PI, 2);
   const double d = 4.0;
   const double omega = 2*M_PI;
   const double b = 50.0;
   const double m = 0.1;
   const double k = 0.2;
-  const double abs_err = 1e-10;
-  const double rel_err = 1e-10;
-
+  const double abs_err = err;
+  const double rel_err = err;
 
   const double dt = 0.01;
-
   std::ofstream write_out(file);
   assert(write_out.is_open());
 
-
   state_type x(2);
   x[1] = 1.0;
-  x[0] = 0.0;
-  integrate_const(make_controlled<error_stepper_type>(abs_err, rel_err),
-                  param_forced_pend(A, L, d, omega, b, m, k),x, 0.0, t_fin, dt,
-                  streaming_observer(write_out));
+  x[0] = 1.0;
 
 
+  if (solver == 1) {
+    typedef runge_kutta_fehlberg78<state_type> error_stepper_type;
+    error_stepper_type stepper;
+    std::cout << "Using Fehlberg78\n";
+    integrate_const(make_controlled<error_stepper_type>(abs_err, rel_err),
+                    param_forced_pend(A, L, d, omega, b, m, k),x, 0.0, t_fin, dt,
+                    streaming_observer(write_out));
+    }
+
+  else if (solver == 2){
+    typedef runge_kutta_cash_karp54<state_type> error_stepper_type;
+    error_stepper_type stepper;
+    std::cout << "Using Cash-Karp54\n";
+    integrate_const(make_controlled<error_stepper_type>(abs_err, rel_err),
+                    param_forced_pend(A, L, d, omega, b, m, k),x, 0.0, t_fin, dt,
+                    streaming_observer(write_out));
+  }
+
+  else {
+    usage(std::cerr, "Please enter 1 or 2 to pick a solver\n");
+  }
 
   write_out.close();
   return 0;
