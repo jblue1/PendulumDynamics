@@ -3,8 +3,10 @@
 #include <string>
 #include <fstream>
 #include <cmath>
+#include "H5Cpp.h"
 
 using namespace boost::numeric::odeint;
+using namespace H5;
 
 // type of container used by ODE solver to store state of the system
 typedef std::vector<double> state_type;
@@ -79,22 +81,28 @@ public:
  * Structure used by ODE solver to write out solutions each step.
  */
 struct streaming_observer {
-  std::ofstream &write_out;
+  int count;
+  double *data_buffer;
+  const int DY;
 
-
-  streaming_observer(std::ofstream &out) : write_out(out) {} // constructor
+  streaming_observer(double *data, const int y) :
+                                                 data_buffer(data),
+                                                 count(0),
+                                                 DY(y)
+                                                 {} // constructor
 
   /**
    * Operator overload called by odeint to write solutions to file
    */
-  void operator()(const state_type &x, double t) const {
-    write_out << t;
+  void operator()(const state_type &x, double t)  {
+    data_buffer[count] = t;
     for (size_t i=0; i< x.size(); i++) {
-      write_out << "," << x[i];
+      data_buffer[(i+1)*DY + count] = x[i];
     }
-    write_out << "\n";
+    count++;
   }
 };
+
 /**
  * Describe parameters taken and print errors if paramters are incorrectly
  * given.
@@ -112,6 +120,7 @@ static void usage(std::ostream &out, const char* msg){
 }
 
 
+
 int main(int argc, char const *argv[]) {
 
   if (argc != 4) {
@@ -119,7 +128,7 @@ int main(int argc, char const *argv[]) {
   }
 
   // store command line arguments
-  const char *file = argv[1];
+  const char *f_name = argv[1];
   const double A = atof(argv[2]);
   const double t_fin = atof(argv[3]);
 
@@ -139,9 +148,30 @@ int main(int argc, char const *argv[]) {
   const int num_points = lrint(t_fin * points_per_sec);
 
 
-  // instantiate streaming_observer
-  std::ofstream write_out(file);
-  assert(write_out.is_open());
+
+  //Create HDF5 file
+  // TODO:Should I do a try/catch here for H5::FileIException if the file already exists?
+  const H5std_string FILE_NAME(f_name);
+  H5File file(FILE_NAME, H5F_ACC_EXCL); // open will fail if file already exists
+
+  // Create dataspace
+  const int DX = 3*num_points;
+  const int RANK = 1;
+  hsize_t dims[1];
+  dims[0] = DX;
+  DataSpace dataspace(RANK, dims);
+
+  //create dataset
+  std::string dset = "dset";
+  std::string Aval(argv[2]);
+  const H5std_string DATASET_NAME(dset+Aval);
+  DataSet dataset = file.createDataSet(DATASET_NAME, PredType::NATIVE_DOUBLE, dataspace);
+
+
+  // instantiate data array
+  double *data = new double [3 * num_points];
+
+
 
   state_type x(2);
   x[1] = 1.0;
@@ -158,8 +188,16 @@ int main(int argc, char const *argv[]) {
 
   integrate_times(make_controlled( abs_err , rel_err , error_stepper_type() ),
                   param_forced_pend(A, L, d, omega, b, m, k),
-                  x , times , dt , streaming_observer(write_out));
+                  x , times , dt , streaming_observer(data, num_points));
 
-  write_out.close();
+  dataset.write(data, PredType::NATIVE_DOUBLE);
+  //dataset.close();
+  //file.close();
+
+  //free memory of data array
+
+  delete [] data;
+
+
   return 0;
 }
