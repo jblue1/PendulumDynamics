@@ -6,20 +6,41 @@
 
 using namespace boost::numeric::odeint;
 
+// type of container used by ODE solver to store state of the system
 typedef std::vector<double> state_type;
-const double g = 9.81;
+
+const double g = 9.81; //gravitational acceleration
 
 
+
+/**
+ * Class containing equations and parameters associated with a parametrically
+ * forced pendulum oscillating vertically about the origin with a repulsive
+ * magnet located some distance below along the y axis.
+ */
 class param_forced_pend {
 protected:
-  double A;
-  double L;
-  double d;
-  double omega;
-  double b;
-  double m;
-  double k;
+  double A; // Amplitude of pivot oscillations
+  double L; // Length of pendulum
+  double d; // Distance from origin to magnet
+  double omega; // Angular frequency of oscillations
+  double b; // Controls strength of magnet
+  double m; // Mass of pendulum
+  double k; // Linear friction coefficient
 
+
+  /**
+   * Helper function for the parametrically forced pendulum with external
+   * magnetic forcing. Calculates -0.5*r^2, where r is the distance between the
+   * pendulum bob and the magnet
+   * @param  t     Time
+   * @param  theta Angle
+   * @param  A     Amplitude of pivot oscillations
+   * @param  L     Length of Pendulum
+   * @param  d     Distance from origin to magnetic
+   * @param  omega Angular freq of pendulum oscillations
+   * @return       -0.5r^2
+   */
   double f(double t, double theta, double A, double L, double d, double omega){
     double z = cos(omega * t);
     return -0.5*(pow(L, 2) + pow(d, 2) + pow((A*z), 2) + 2*A*L*z*cos(theta) -
@@ -27,6 +48,9 @@ protected:
   }
 
 public:
+  /**
+   * Class constructor. Params described above.
+   */
   param_forced_pend(double A, double L, double d, double omega, double b,
                     double m, double k){
     this->A=A;
@@ -38,6 +62,10 @@ public:
     this->k=k;
   }
 
+  /**
+   * Operator overload. Right hand side of equations of motion for the Pendulum
+   * (dxdt = f(x, t)).
+   */
   void operator()(state_type &x, state_type &dxdt, double t){
     double z = cos(omega*t);
     dxdt[0] = x[1];
@@ -47,12 +75,18 @@ public:
   }
 };
 
-
+/**
+ * Structure used by ODE solver to write out solutions each step.
+ */
 struct streaming_observer {
   std::ofstream &write_out;
 
-  streaming_observer(std::ofstream &out) : write_out(out) {}
 
+  streaming_observer(std::ofstream &out) : write_out(out) {} // constructor
+
+  /**
+   * Operator overload called by odeint to write solutions to file
+   */
   void operator()(const state_type &x, double t) const {
     write_out << t;
     for (size_t i=0; i< x.size(); i++) {
@@ -61,7 +95,12 @@ struct streaming_observer {
     write_out << "\n";
   }
 };
-
+/**
+ * Describe parameters taken and print errors if paramters are incorrectly
+ * given.
+ * @param out output stream for messages
+ * @param msg Error message to print
+ */
 static void usage(std::ostream &out, const char* msg){
     out << msg << "\n" << "\n";
     out << "  Usage:\n";
@@ -69,35 +108,38 @@ static void usage(std::ostream &out, const char* msg){
     out << "  file  - name of output file\n";
     out << "  A     - amplitude of pivot oscillations\n";
     out << "  time  - Time to simulate system\n";
-    out << "  1|2   - 1 for 8th order RK and 2 for 5th order\n";
-    out << "  err   - value for absolute and relative error tolerance in the ODE solver\n\n";
     exit(1);
 }
 
 
 int main(int argc, char const *argv[]) {
-  if (argc != 6) {
+
+  if (argc != 4) {
     usage(std::cerr, "Incorrect Number of parameters given.");
   }
 
-
-
+  // store command line arguments
   const char *file = argv[1];
   const double A = atof(argv[2]);
   const double t_fin = atof(argv[3]);
-  const int solver = atoi(argv[4]);
-  const double err = atof(argv[5]);
+
+  // define parameters for system
   const double L = g/pow(M_PI, 2);
   const double d = 4.0;
   const double omega = 2*M_PI;
   const double b = 50.0;
   const double m = 0.1;
   const double k = 0.2;
-  const double abs_err = err;
-  const double rel_err = err;
-  const double points_per_sec = 100.0;
 
+  // define parameters for ODE solver
+  const double abs_err = 1e-10;
+  const double rel_err = 1e-10;
+  const double points_per_sec = 100.0;
   const double dt = 1/points_per_sec;
+  const int num_points = lrint(t_fin * points_per_sec);
+
+
+  // instantiate streaming_observer
   std::ofstream write_out(file);
   assert(write_out.is_open());
 
@@ -105,37 +147,18 @@ int main(int argc, char const *argv[]) {
   x[1] = 1.0;
   x[0] = 1.0;
 
-  const int num_points = lrint(t_fin * points_per_sec);
-
+  // create vector dictating the times at which we want solutions
   std::vector<double> times(num_points );
   for( size_t i=0 ; i<times.size() ; ++i )
     times[i] = dt*i;
 
 
+  typedef runge_kutta_fehlberg78<state_type> error_stepper_type;
+  error_stepper_type stepper;
 
-  if (solver == 1) {
-    typedef runge_kutta_fehlberg78<state_type> error_stepper_type;
-    error_stepper_type stepper;
-    std::cout << "Using Fehlberg78\n";\
-
-    integrate_times(make_controlled( abs_err , rel_err , error_stepper_type() ),
-                    param_forced_pend(A, L, d, omega, b, m, k),
-                           x , times , dt , streaming_observer(write_out));                       
-    }
-
-  else if (solver == 2){
-    typedef runge_kutta_cash_karp54<state_type> error_stepper_type;
-    error_stepper_type stepper;
-    std::cout << "Using Cash-Karp54\n";
-
-    integrate_times(make_controlled( abs_err , rel_err , error_stepper_type() ),
-                    param_forced_pend(A, L, d, omega, b, m, k),
-                           x , times , dt , streaming_observer(write_out));
-  }
-
-  else {
-    usage(std::cerr, "Please enter 1 or 2 to pick a solver\n");
-  }
+  integrate_times(make_controlled( abs_err , rel_err , error_stepper_type() ),
+                  param_forced_pend(A, L, d, omega, b, m, k),
+                  x , times , dt , streaming_observer(write_out));
 
   write_out.close();
   return 0;
