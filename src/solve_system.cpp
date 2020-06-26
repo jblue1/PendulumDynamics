@@ -3,10 +3,13 @@
 #include <string>
 #include <fstream>
 #include <cmath>
+#include <filesystem>
 #include "H5Cpp.h"
+
 
 using namespace boost::numeric::odeint;
 using namespace H5;
+namespace fs = std::filesystem;
 
 // type of container used by ODE solver to store state of the system
 typedef std::vector<double> state_type;
@@ -113,10 +116,19 @@ static void usage(std::ostream &out, const char* msg){
     out << msg << "\n" << "\n";
     out << "  Usage:\n";
     out << "        solve_system file A\n";
-    out << "  file  - name of output file\n";
+    out << "  dir   - path to directory to save file to\n";
     out << "  A     - amplitude of pivot oscillations\n";
     out << "  time  - Time to simulate system\n";
     exit(1);
+}
+
+static void write_params(std::ostream &out, const double (&params)[6]) {
+  out << "L = " << params[0] << "\n";
+  out << "d = " << params[1] << "\n";
+  out << "omega = " << params[2] << "\n";
+  out << "b = " << params[3] << "\n";
+  out << "m = " << params[4] << "\n";
+  out << "k = " << params[5] << "\n";
 }
 
 
@@ -128,9 +140,18 @@ int main(int argc, char const *argv[]) {
   }
 
   // store command line arguments
-  const char *f_name = argv[1];
+  const std::string dir_name(argv[1]);
   const double A = atof(argv[2]);
   const double t_fin = atof(argv[3]);
+
+  // create directory to save data to
+  if (!fs::is_directory(dir_name) || !fs::exists(dir_name)) {
+    fs::create_directory(dir_name);
+  }
+
+  else {
+    usage(std::cerr, "Provide a path that does not lead to an existing directory or file");
+  }
 
   // define parameters for system
   const double L = g/pow(M_PI, 2);
@@ -139,6 +160,11 @@ int main(int argc, char const *argv[]) {
   const double b = 50.0;
   const double m = 0.1;
   const double k = 0.2;
+  const double params[6] = {L, d, omega, b, m, k};
+
+  //write parameters out to file
+  std::ofstream write_out(dir_name + "/params.txt");
+  write_params(write_out, params);
 
   // define parameters for ODE solver
   const double abs_err = 1e-10;
@@ -150,8 +176,7 @@ int main(int argc, char const *argv[]) {
 
 
   //Create HDF5 file
-  // TODO:Should I do a try/catch here for H5::FileIException if the file already exists?
-  const H5std_string FILE_NAME(f_name);
+  const H5std_string FILE_NAME(dir_name + "/data.h5");
   H5File file(FILE_NAME, H5F_ACC_EXCL); // open will fail if file already exists
 
   // Create dataspace
@@ -172,16 +197,16 @@ int main(int argc, char const *argv[]) {
   double *data = new double [3 * num_points];
 
 
-
+  //instantiate state vector
   state_type x(2);
   x[1] = 1.0;
   x[0] = 1.0;
 
   // create vector dictating the times at which we want solutions
   std::vector<double> times(num_points );
-  for( size_t i=0 ; i<times.size() ; ++i )
+  for( size_t i=0 ; i<times.size() ; ++i ){
     times[i] = dt*i;
-
+  }
 
   typedef runge_kutta_fehlberg78<state_type> error_stepper_type;
   error_stepper_type stepper;
@@ -191,11 +216,8 @@ int main(int argc, char const *argv[]) {
                   x , times , dt , streaming_observer(data, num_points));
 
   dataset.write(data, PredType::NATIVE_DOUBLE);
-  //dataset.close();
-  //file.close();
 
   //free memory of data array
-
   delete [] data;
 
 
