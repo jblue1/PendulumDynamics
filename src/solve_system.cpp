@@ -117,7 +117,6 @@ static void usage(std::ostream &out, const char* msg){
     out << "  Usage:\n";
     out << "        solve_system file A\n";
     out << "  dir   - path to directory to save file to\n";
-    out << "  A     - amplitude of pivot oscillations\n";
     out << "  time  - Time to simulate system\n";
     exit(1);
 }
@@ -135,14 +134,16 @@ static void write_params(std::ostream &out, const double (&params)[6]) {
 
 int main(int argc, char const *argv[]) {
 
-  if (argc != 4) {
+
+  if (argc != 3) {
     usage(std::cerr, "Incorrect Number of parameters given.");
   }
 
   // store command line arguments
   const std::string dir_name(argv[1]);
-  const double A = atof(argv[2]);
-  const double t_fin = atof(argv[3]);
+  const double t_fin = atof(argv[2]);
+
+  std::cout << "Here" << "\n";
 
   // create directory to save data to
   if (!fs::is_directory(dir_name) || !fs::exists(dir_name)) {
@@ -175,32 +176,21 @@ int main(int argc, char const *argv[]) {
 
 
 
-  //Create HDF5 file
+  // Create HDF5 file
   const H5std_string FILE_NAME(dir_name + "/data.h5");
   H5File file(FILE_NAME, H5F_ACC_EXCL); // open will fail if file already exists
 
-  // Create dataspace
-  const int DX = 3*num_points;
+
+  // Constants needed to create dataspaces
+  const hsize_t DX = 3*num_points;
   const int RANK = 1;
-  hsize_t dims[1];
-  dims[0] = DX;
-  DataSpace dataspace(RANK, dims);
-
-  //create dataset
-  std::string dset = "dset";
-  std::string Aval(argv[2]);
-  const H5std_string DATASET_NAME(dset+Aval);
-  DataSet dataset = file.createDataSet(DATASET_NAME, PredType::NATIVE_DOUBLE, dataspace);
+  hsize_t dataspace_dims[1] = {DX};
 
 
-  // instantiate data array
-  double *data = new double [3 * num_points];
+  // Constants needed to create attributes
+  const H5std_string ATTR_NAME("Initial Conditions");
+  hsize_t attr_dims[1] = {2};
 
-
-  //instantiate state vector
-  state_type x(2);
-  x[1] = 1.0;
-  x[0] = 1.0;
 
   // create vector dictating the times at which we want solutions
   std::vector<double> times(num_points );
@@ -211,15 +201,61 @@ int main(int argc, char const *argv[]) {
   typedef runge_kutta_fehlberg78<state_type> error_stepper_type;
   error_stepper_type stepper;
 
-  integrate_times(make_controlled( abs_err , rel_err , error_stepper_type() ),
-                  param_forced_pend(A, L, d, omega, b, m, k),
-                  x , times , dt , streaming_observer(data, num_points));
 
-  dataset.write(data, PredType::NATIVE_DOUBLE);
+  const double A_step = 0.0001;
+  double A;
 
-  //free memory of data array
-  delete [] data;
+  const double step_theta = 2*M_PI/199;
+  const double step_theta_dot = 6.0/4.0;
 
+  for (size_t i=0; i < 100; i++){
+
+    A = i*A_step + 0.01;
+    std::cout << "A: " << A << "\n";
+    std::string Astr = std::to_string(A);
+    Astr.pop_back();
+    Astr.pop_back();
+
+    // Create group inside file
+    Group group(file.createGroup("/group" + Astr));
+    int count = 0;
+    for (size_t j=0; j<100; j++) {
+      for (size_t k=0; k<5; k++) {
+
+        // create DataSpace
+        DataSpace dataspace(RANK, dataspace_dims);
+
+        //create dataset
+        std::string countstr = std::to_string(count);
+        std::string dset = "dset" + countstr;
+        const H5std_string DATASET_NAME(dset);
+        DataSet dataset = group.createDataSet(DATASET_NAME, PredType::NATIVE_DOUBLE, dataspace);
+
+        //instantiate state vector
+        state_type x(2);
+        x[0] = -M_PI + step_theta*j;
+        x[1] = -3 + step_theta_dot*k;
+
+        // create attribute to store initial Conditions
+        // stored as array with [theta_init, theta_dot_init]
+        double attr_data[2] = {x[0], x[1]};
+        DataSpace attr_dataspace = DataSpace(1, attr_dims);
+        Attribute attribute = dataset.createAttribute(ATTR_NAME, PredType::NATIVE_DOUBLE, attr_dataspace);
+        attribute.write(PredType::NATIVE_DOUBLE, attr_data);
+
+        // instantiate data array
+        double *data = new double [3 * num_points];
+
+        integrate_times(make_controlled( abs_err , rel_err , error_stepper_type() ),
+                        param_forced_pend(A, L, d, omega, b, m, k),
+                        x , times , dt , streaming_observer(data, num_points));
+        dataset.write(data, PredType::NATIVE_DOUBLE);
+        count++;
+        //free memory of data array
+        delete [] data;
+      }
+    }
+  }
 
   return 0;
 }
