@@ -1,8 +1,7 @@
 #ifndef SYSTEMSREF
 #define SYSTEMSREF
 #include <boost/numeric/odeint.hpp>
-
-using namespace boost::numeric::odeint;
+#include <fstream>
 
 typedef std::vector<double> state_type;
 
@@ -31,7 +30,7 @@ protected:
    */
   double f(double t, double theta, double A, double L, double d, double omega);
 
-
+public:
   /**
    * Class constructor. Params described above.
    */
@@ -44,24 +43,6 @@ protected:
   * (dxdt = f(x, t)).
   */
   void operator()(state_type &x, state_type &dxdt, double t);
-};
-
-/**
- * Structure used by ODE solver to write out solutions each step.
- */
-struct streaming_observer{
-protected:
-  int count;
-  double *data_buffer;
-  const int DY;
-
-  streaming_observer(double *data, const int y); // constructor
-public:
-
-  /**
-   * Operator overload called by odeint to write solutions to file
-   */
-  void operator()(const state_type &x, double t);
 };
 
 
