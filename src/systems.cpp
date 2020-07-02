@@ -18,7 +18,7 @@ const double g = 9.81;
  * @return       -0.5r^2
  */
 double param_forced_pend::f(double t, double theta, double A, double L,
-  double d, double omega)
+                            double d, double omega)
   {
 
   double z = cos(omega * t);
@@ -29,7 +29,7 @@ double param_forced_pend::f(double t, double theta, double A, double L,
  * Class constructor
  */
 param_forced_pend::param_forced_pend(double A, double L, double d, double omega,
-  double b, double m, double k)
+                                     double b, double m, double k)
   {
     this->A=A;
     this->L=L;

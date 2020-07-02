@@ -24,7 +24,8 @@ const double g = 9.81; //gravitational acceleration
  * @param out output stream for messages
  * @param msg Error message to print
  */
-static void usage(std::ostream &out, const char* msg){
+static void usage(std::ostream &out, const char* msg)
+{
     out << msg << "\n" << "\n";
     out << "  Usage:\n";
     out << "        solve_system file A\n";
@@ -36,7 +37,8 @@ static void usage(std::ostream &out, const char* msg){
     exit(1);
 }
 
-static void write_params(std::ostream &out, const double (&params)[6]) {
+static void write_params(std::ostream &out, const double (&params)[6])
+{
   out << "L = " << params[0] << "\n";
   out << "d = " << params[1] << "\n";
   out << "omega = " << params[2] << "\n";
@@ -47,9 +49,8 @@ static void write_params(std::ostream &out, const double (&params)[6]) {
 
 
 
-int main(int argc, char const *argv[]) {
-
-
+int main(int argc, char const *argv[])
+{
   if (argc != 6) {
     usage(std::cerr, "Incorrect Number of parameters given.");
   }
@@ -89,6 +90,7 @@ int main(int argc, char const *argv[]) {
   const double points_per_sec = 100.0;
   const double dt = 1/points_per_sec;
   const int num_points = lrint(t_fin + 1);
+  double A;
 
 
 
@@ -105,7 +107,7 @@ int main(int argc, char const *argv[]) {
 
   // create vector dictating the times at which we want solutions
   std::vector<double> times(num_points);
-  times[0] = 0.0;
+  times[0] = 0.0; // make sure to start from t=0
   for( size_t i=1 ; i<times.size() ; ++i ){
     times[i] = i - 0.5; //storing data at every half second
   }
@@ -113,7 +115,7 @@ int main(int argc, char const *argv[]) {
   typedef runge_kutta_fehlberg78<state_type> error_stepper_type;
   error_stepper_type stepper;
 
-  double A;
+
 
   const double step_theta = 2*M_PI/199;
   const double step_theta_dot = 6.0/4.0;
@@ -123,7 +125,8 @@ int main(int argc, char const *argv[]) {
     A = (i)*A_step + A_start;
     std::cout << "A: " << A << "\n";
     std::string Astr = std::to_string(A);
-    Astr.pop_back();
+    // TODO: find more reliable way to make sure
+    Astr.pop_back(); // remove trailing zeros
     Astr.pop_back();
 
     // Create group inside file
@@ -145,12 +148,15 @@ int main(int argc, char const *argv[]) {
         state_type x(2);
         x[0] = -M_PI + step_theta*j;
         x[1] = -3 + step_theta_dot*p;
+
         //instantiate data array
-        double *data = new double [3 * (num_points + 1)];
+        double *data = new double [3 * (num_points)];
 
         integrate_times(make_controlled( abs_err , rel_err , error_stepper_type() ),
                         param_forced_pend(A, L, d, omega, b, m, k),
                         x , times, dt , streaming_observer_h5(data, num_points));
+
+
         dataset.write(data, PredType::NATIVE_DOUBLE);
         count++;
         //free memory of data array
