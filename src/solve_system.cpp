@@ -77,9 +77,22 @@ public:
     dxdt[1] = -k*x[1] - (sin(x[0])/L)*(g - A*z*pow(omega, 2) +
               (b/m)*(A*z-d)*exp(f(t, x[0], A, L, d, omega)));
 
+
   }
 };
 
+struct streaming_observer_csv {
+  std::ofstream &write_out;
+  streaming_observer_csv(std::ofstream &out): write_out(out) {}
+
+  void operator()(const state_type &x, double t) const {
+    write_out << t;
+    for (size_t i=0; i < x.size(); i++) {
+      write_out << "," << x[i];
+    }
+    write_out << "\n";
+  }
+};
 /**
  * Structure used by ODE solver to write out solutions each step.
  */
@@ -143,8 +156,6 @@ int main(int argc, char const *argv[]) {
   const std::string dir_name(argv[1]);
   const double t_fin = atof(argv[2]);
 
-  std::cout << "Here" << "\n";
-
   // create directory to save data to
   if (!fs::is_directory(dir_name) || !fs::exists(dir_name)) {
     fs::create_directory(dir_name);
@@ -187,11 +198,6 @@ int main(int argc, char const *argv[]) {
   hsize_t dataspace_dims[1] = {DX};
 
 
-  // Constants needed to create attributes
-  const H5std_string ATTR_NAME("Initial Conditions");
-  hsize_t attr_dims[1] = {2};
-
-
   // create vector dictating the times at which we want solutions
   std::vector<double> times(num_points );
   for( size_t i=0 ; i<times.size() ; ++i ){
@@ -208,9 +214,9 @@ int main(int argc, char const *argv[]) {
   const double step_theta = 2*M_PI/199;
   const double step_theta_dot = 6.0/4.0;
 
-  for (size_t i=0; i < 100; i++){
+  for (size_t i=0; i < 20; i++){
 
-    A = i*A_step + 0.01;
+    A = (i+1)*A_step + 0.025;
     std::cout << "A: " << A << "\n";
     std::string Astr = std::to_string(A);
     Astr.pop_back();
@@ -220,7 +226,7 @@ int main(int argc, char const *argv[]) {
     Group group(file.createGroup("/group" + Astr));
     int count = 0;
     for (size_t j=0; j<100; j++) {
-      for (size_t k=0; k<5; k++) {
+      for (size_t p=0; p<5; p++) {
 
         // create DataSpace
         DataSpace dataspace(RANK, dataspace_dims);
@@ -234,21 +240,14 @@ int main(int argc, char const *argv[]) {
         //instantiate state vector
         state_type x(2);
         x[0] = -M_PI + step_theta*j;
-        x[1] = -3 + step_theta_dot*k;
+        x[1] = -3 + step_theta_dot*p;
 
-        // create attribute to store initial Conditions
-        // stored as array with [theta_init, theta_dot_init]
-        double attr_data[2] = {x[0], x[1]};
-        DataSpace attr_dataspace = DataSpace(1, attr_dims);
-        Attribute attribute = dataset.createAttribute(ATTR_NAME, PredType::NATIVE_DOUBLE, attr_dataspace);
-        attribute.write(PredType::NATIVE_DOUBLE, attr_data);
-
-        // instantiate data array
+        //instantiate data array
         double *data = new double [3 * num_points];
 
         integrate_times(make_controlled( abs_err , rel_err , error_stepper_type() ),
                         param_forced_pend(A, L, d, omega, b, m, k),
-                        x , times , dt , streaming_observer(data, num_points));
+                        x , times, dt , streaming_observer(data, num_points));
         dataset.write(data, PredType::NATIVE_DOUBLE);
         count++;
         //free memory of data array
