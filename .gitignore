@@ -1,6 +1,9 @@
 # Compiled object files
 *.o
 
-directories
+# jupyter notebook stuff
+.ipynb_checkpoints
+
+# directories
 bin/
 data/
