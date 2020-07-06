@@ -1,8 +1,6 @@
 import numpy as np
-import pickle
 import h5py
-import os
-import io
+import matplotlib.pyplot as plt
 
 
 def get_unique(arr, start, step):
@@ -38,35 +36,42 @@ def add_unique(list1, list2):
 
 
 def main():
-    if os.path.isfile('graph_list'):
-        file = io.open('graph_list', 'rb')
-        graph = pickle.load(file)
-        file.close()
-    else:
-        graph = []
-    A_step = 0.0001
-    for i in range(100):
-        velocities = []
-        A = (i+1)*A_step + 0.04
-        group = "group{:.4f}".format(A)
-        with h5py.File('../data/run5/data.h5', 'r') as f:
+    bif = []
+    with h5py.File('../data/big/data.h5', 'r') as f:
+        A = 0.0001
+        for i in range(699):
+            unique_thetas = []
+            group = "group{:.4f}".format(A)
             dset = f[group]
             print(A)
             for j in range(500):
                 data = dset['dset' + str(j)]
                 NY = int(len(data)/3)
                 data = np.reshape(data, (3, NY))
-                length = len(data[0])
-                index = np.argmax(data[2][-length//4:-length//4 + 2001])
-                start = length-length//4 + index
-                y_vals = get_unique(data[2], start, 100)
-                velocities = add_unique(velocities, y_vals)
-        print(velocities)
-        graph.append([round(A, 4), velocities])
-    print(graph)
-    file = io.open('graph_list', 'wb')
-    pickle.dump(graph, file)
-    file.close()
+                y_vals = get_unique(data[2], 500, 1)
+                unique_thetas = add_unique(unique_thetas, y_vals)
+            bif.append([A, unique_thetas])
+            A += 0.0001
+
+    As = []
+    vals = []
+    for i in range(len(bif)):
+        for j in range(len(bif[i][1])):
+            As.append(bif[i][0])
+            vals.append(bif[i][1][j])
+
+    fig = plt.figure(figsize=(8, 5), dpi=300)
+    ax = fig.add_subplot(111)
+    ax.scatter(As, vals, s=0.5)
+    ax.set_title('Bifurcation Diagram')
+    ax.set_xlabel('A')
+    ax.set_ylabel('Theta_dot')
+    ax.set_xlim(0.015, 0.05)
+    ax.set_ylim(-2, 2)
+
+    plt.savefig('../data/imgs/Bifurcation_Diagram_Zoom.png')
+
+    return
 
 
 if __name__ == '__main__':
