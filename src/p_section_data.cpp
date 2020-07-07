@@ -123,8 +123,7 @@ int main(int argc, char const *argv[]) {
     A = (i)*A_step + A_start;
     std::cout << "A: " << A << "\n";
     std::string Astr = std::to_string(A);
-    Astr.pop_back();
-    Astr.pop_back();
+
 
     // Create group inside file
     Group group(file.createGroup("/group" + Astr));
