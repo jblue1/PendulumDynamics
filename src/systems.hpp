@@ -5,7 +5,8 @@
 
 typedef std::vector<double> state_type;
 
-class param_forced_pend{
+class param_forced_pend
+{
 protected:
   double A; // Amplitude of pivot oscillations
   double L; // Length of pendulum
@@ -39,7 +40,7 @@ public:
 
 
   /**
-  * Operator overload. Right hand side of equations of motion for the Pendulum
+  * Operator overload. Right hand side of equations of motion for the pendulum
   * (dxdt = f(x, t)).
   */
   void operator()(state_type &x, state_type &dxdt, double t);
