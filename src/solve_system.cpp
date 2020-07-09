@@ -96,7 +96,6 @@ int main(int argc, char const *argv[]) {
   times[0] = 0.0;
   for( size_t i=1 ; i<times.size() ; ++i ){
     times[i] = dt*i + 1000.0;
-    std::cout << times[i] << "\n";
   }
 
   typedef runge_kutta_fehlberg78<state_type> error_stepper_type;
