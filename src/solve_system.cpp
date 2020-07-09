@@ -1,14 +1,13 @@
 #include <boost/numeric/odeint.hpp>
-#include <stdio.h>
 #include <string>
 #include <fstream>
 #include <cmath>
 #include <filesystem>
-#include "H5Cpp.h"
+#include "systems.hpp"
+#include "streaming_observers.hpp"
 
 
 using namespace boost::numeric::odeint;
-using namespace H5;
 namespace fs = std::filesystem;
 
 // type of container used by ODE solver to store state of the system
@@ -16,108 +15,6 @@ typedef std::vector<double> state_type;
 
 const double g = 9.81; //gravitational acceleration
 
-
-
-/**
- * Class containing equations and parameters associated with a parametrically
- * forced pendulum oscillating vertically about the origin with a repulsive
- * magnet located some distance below along the y axis.
- */
-class param_forced_pend {
-protected:
-  double A; // Amplitude of pivot oscillations
-  double L; // Length of pendulum
-  double d; // Distance from origin to magnet
-  double omega; // Angular frequency of oscillations
-  double b; // Controls strength of magnet
-  double m; // Mass of pendulum
-  double k; // Linear friction coefficient
-
-
-  /**
-   * Helper function for the parametrically forced pendulum with external
-   * magnetic forcing. Calculates -0.5*r^2, where r is the distance between the
-   * pendulum bob and the magnet
-   * @param  t     Time
-   * @param  theta Angle
-   * @param  A     Amplitude of pivot oscillations
-   * @param  L     Length of Pendulum
-   * @param  d     Distance from origin to magnetic
-   * @param  omega Angular freq of pendulum oscillations
-   * @return       -0.5r^2
-   */
-  double f(double t, double theta, double A, double L, double d, double omega){
-    double z = cos(omega * t);
-    return -0.5*(pow(L, 2) + pow(d, 2) + pow((A*z), 2) + 2*A*L*z*cos(theta) -
-            2*A*d*z - 2*d*L*cos(theta));
-  }
-
-public:
-  /**
-   * Class constructor. Params described above.
-   */
-  param_forced_pend(double A, double L, double d, double omega, double b,
-                    double m, double k){
-    this->A=A;
-    this->L=L;
-    this->d=d;
-    this->omega=omega;
-    this->b=b;
-    this->m=m;
-    this->k=k;
-  }
-
-  /**
-   * Operator overload. Right hand side of equations of motion for the Pendulum
-   * (dxdt = f(x, t)).
-   */
-  void operator()(state_type &x, state_type &dxdt, double t){
-    double z = cos(omega*t);
-    dxdt[0] = x[1];
-    dxdt[1] = -k*x[1] - (sin(x[0])/L)*(g - A*z*pow(omega, 2) +
-              (b/m)*(A*z-d)*exp(f(t, x[0], A, L, d, omega)));
-
-
-  }
-};
-
-struct streaming_observer_csv {
-  std::ofstream &write_out;
-  streaming_observer_csv(std::ofstream &out): write_out(out) {}
-
-  void operator()(const state_type &x, double t) const {
-    write_out << t;
-    for (size_t i=0; i < x.size(); i++) {
-      write_out << "," << x[i];
-    }
-    write_out << "\n";
-  }
-};
-/**
- * Structure used by ODE solver to write out solutions each step.
- */
-struct streaming_observer {
-  int count;
-  double *data_buffer;
-  const int DY;
-
-  streaming_observer(double *data, const int y) :
-                                                 data_buffer(data),
-                                                 count(0),
-                                                 DY(y)
-                                                 {} // constructor
-
-  /**
-   * Operator overload called by odeint to write solutions to file
-   */
-  void operator()(const state_type &x, double t)  {
-    data_buffer[count] = t;
-    for (size_t i=0; i< x.size(); i++) {
-      data_buffer[(i+1)*DY + count] = x[i];
-    }
-    count++;
-  }
-};
 
 /**
  * Describe parameters taken and print errors if paramters are incorrectly
@@ -129,8 +26,11 @@ static void usage(std::ostream &out, const char* msg){
     out << msg << "\n" << "\n";
     out << "  Usage:\n";
     out << "        solve_system file A\n";
-    out << "  dir   - path to directory to save file to\n";
-    out << "  time  - Time to simulate system\n";
+    out << "  dir            - path to directory to save file to\n";
+    out << "  time           - Time to simulate system\n";
+    out << "  A              - Driving Amplitude\n";
+    out << "  theta_init     - initial angle\n";
+    out << "  theta_dot_init - initial angular velocity\n";
     exit(1);
 }
 
@@ -147,14 +47,16 @@ static void write_params(std::ostream &out, const double (&params)[6]) {
 
 int main(int argc, char const *argv[]) {
 
-
-  if (argc != 3) {
+  if (argc != 6) {
     usage(std::cerr, "Incorrect Number of parameters given.");
   }
 
   // store command line arguments
   const std::string dir_name(argv[1]);
-  const double t_fin = atof(argv[2]);
+  const int t_fin = atoi(argv[2]);
+  const double A = atof(argv[3]);
+  const double theta_init = atof(argv[4]);
+  const double theta_dot_init = atof(argv[5]);
 
   // create directory to save data to
   if (!fs::is_directory(dir_name) || !fs::exists(dir_name)) {
@@ -178,83 +80,39 @@ int main(int argc, char const *argv[]) {
   std::ofstream write_out(dir_name + "/params.txt");
   write_params(write_out, params);
 
+  std::ofstream write_data(dir_name + "/data.txt");
+
   // define parameters for ODE solver
   const double abs_err = 1e-10;
   const double rel_err = 1e-10;
-  const double points_per_sec = 100.0;
-  const double dt = 1/points_per_sec;
-  const int num_points = lrint(t_fin * points_per_sec);
+  const int points_per_sec = 10;
+  const double dt = 1.0/points_per_sec;
+  const int num_points = points_per_sec * t_fin + 1;
 
-
-
-  // Create HDF5 file
-  const H5std_string FILE_NAME(dir_name + "/data.h5");
-  H5File file(FILE_NAME, H5F_ACC_EXCL); // open will fail if file already exists
-
-
-  // Constants needed to create dataspaces
-  const hsize_t DX = 3*num_points;
-  const int RANK = 1;
-  hsize_t dataspace_dims[1] = {DX};
-
+  std::cout << "num points: " << num_points << "\n";
 
   // create vector dictating the times at which we want solutions
-  std::vector<double> times(num_points );
-  for( size_t i=0 ; i<times.size() ; ++i ){
-    times[i] = dt*i;
+  std::vector<double> times(num_points);
+  times[0] = 0.0;
+  for( size_t i=1 ; i<times.size() ; ++i ){
+    times[i] = dt*i + 1000.0;
+    std::cout << times[i] << "\n";
   }
 
   typedef runge_kutta_fehlberg78<state_type> error_stepper_type;
   error_stepper_type stepper;
 
+  //instantiate state vector
+  state_type x(2);
+  x[0] = theta_init;
+  x[1] = theta_dot_init;
 
-  const double A_step = 0.0001;
-  double A;
 
-  const double step_theta = 2*M_PI/199;
-  const double step_theta_dot = 6.0/4.0;
+  integrate_times(make_controlled( abs_err , rel_err , error_stepper_type() ),
+                  param_forced_pend(A, L, d, omega, b, m, k),
+                  x , times, dt , streaming_observer_csv(write_data));
+  write_data.close();
 
-  for (size_t i=0; i < 20; i++){
-
-    A = (i+1)*A_step + 0.025;
-    std::cout << "A: " << A << "\n";
-    std::string Astr = std::to_string(A);
-    Astr.pop_back();
-    Astr.pop_back();
-
-    // Create group inside file
-    Group group(file.createGroup("/group" + Astr));
-    int count = 0;
-    for (size_t j=0; j<100; j++) {
-      for (size_t p=0; p<5; p++) {
-
-        // create DataSpace
-        DataSpace dataspace(RANK, dataspace_dims);
-
-        //create dataset
-        std::string countstr = std::to_string(count);
-        std::string dset = "dset" + countstr;
-        const H5std_string DATASET_NAME(dset);
-        DataSet dataset = group.createDataSet(DATASET_NAME, PredType::NATIVE_DOUBLE, dataspace);
-
-        //instantiate state vector
-        state_type x(2);
-        x[0] = -M_PI + step_theta*j;
-        x[1] = -3 + step_theta_dot*p;
-
-        //instantiate data array
-        double *data = new double [3 * num_points];
-
-        integrate_times(make_controlled( abs_err , rel_err , error_stepper_type() ),
-                        param_forced_pend(A, L, d, omega, b, m, k),
-                        x , times, dt , streaming_observer(data, num_points));
-        dataset.write(data, PredType::NATIVE_DOUBLE);
-        count++;
-        //free memory of data array
-        delete [] data;
-      }
-    }
-  }
 
   return 0;
 }
