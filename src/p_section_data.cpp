@@ -85,11 +85,30 @@ int main(int argc, char const *argv[])
   write_params(write_out, params);
 
   // define parameters for ODE solver
-  const double abs_err = 1e-10;
-  const double rel_err = 1e-10;
+  const double abs_err = 1e-12;
+  const double rel_err = 1e-12;
   const double points_per_sec = 100.0;
-  const double dt = 1/points_per_sec;
-  const int num_points = lrint(t_fin + 1);
+  const int num_points = lrint(abs(t_fin + 1));
+  std::vector<double> times(num_points);
+  times[0] = 0.0; // make sure to start from t=0
+  double dt;
+  if (t_fin > 0)
+  {
+    dt = 1/points_per_sec;
+    for( size_t i=1 ; i<times.size() ; ++i )
+    {
+      times[i] = i - 0.5; //storing data at every half second
+    }
+  }
+  else
+  {
+    dt = -1/points_per_sec;
+    for( size_t i=1 ; i<times.size() ; ++i )
+    {
+      times[i] = -i - 0.5; //storing data at every half second
+    }
+  }
+
   double A;
 
 
@@ -106,11 +125,9 @@ int main(int argc, char const *argv[])
 
 
   // create vector dictating the times at which we want solutions
-  std::vector<double> times(num_points);
-  times[0] = 0.0; // make sure to start from t=0
-  for( size_t i=1 ; i<times.size() ; ++i ){
-    times[i] = i - 0.5; //storing data at every half second
-  }
+
+
+
 
   typedef runge_kutta_fehlberg78<state_type> error_stepper_type;
   error_stepper_type stepper;
@@ -124,11 +141,11 @@ int main(int argc, char const *argv[])
 
     A = (i)*A_step + A_start;
     std::cout << "A: " << A << "\n";
-    std::string Astr = std::to_string(A);
+    std::string istr = std::to_string(i);
 
 
     // Create group inside file
-    Group group(file.createGroup("/group" + Astr));
+    Group group(file.createGroup("/group" + istr));
     int count = 0;
     for (size_t j=0; j<100; j++) {
       for (size_t p=0; p<5; p++) {
