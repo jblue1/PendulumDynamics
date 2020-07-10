@@ -81,7 +81,7 @@ int main(int argc, char const *argv[])
   const double b = 50.0;
   const double m = 0.1;
   const double k = 0.2;
-  const double params[9] = {L, d, omega, b, m, k, A_start, A_step, num_steps};
+  const double params[9] = {L, d, omega, b, m, k, A_start, A_step, double(num_steps)};
 
   //write parameters out to file
   std::ofstream write_out(dir_name + "/params.txt");
