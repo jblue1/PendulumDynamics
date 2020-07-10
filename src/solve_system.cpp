@@ -85,17 +85,18 @@ int main(int argc, char const *argv[]) {
   // define parameters for ODE solver
   const double abs_err = 1e-10;
   const double rel_err = 1e-10;
-  const int points_per_sec = 10;
+  const double points_per_sec = 10;
   const double dt = 1.0/points_per_sec;
-  const int num_points = points_per_sec * t_fin + 1;
+  const int num_points = lrint(t_fin + 1);
+  const double init_step = 1e-12;
 
-  std::cout << "num points: " << num_points << "\n";
 
   // create vector dictating the times at which we want solutions
   std::vector<double> times(num_points);
   times[0] = 0.0;
-  for( size_t i=1 ; i<times.size() ; ++i ){
-    times[i] = dt*i + 1000.0;
+  for( size_t i=1 ; i<times.size() ; ++i )
+  {
+    times[i] = i + 3000.5; // storing data at every half second starting after 3000 seconds
   }
 
   typedef runge_kutta_fehlberg78<state_type> error_stepper_type;
