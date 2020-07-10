@@ -123,7 +123,7 @@ int main(int argc, char const *argv[])
 
 
   double A;
-  const double step_theta = 2*M_PI/199;
+  const double step_theta = 2*M_PI/99;
   const double step_theta_dot = 6.0/4.0;
 
   for (size_t i=0; i < num_steps; i++){

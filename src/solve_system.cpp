@@ -83,8 +83,8 @@ int main(int argc, char const *argv[]) {
   std::ofstream write_data(dir_name + "/data.txt");
 
   // define parameters for ODE solver
-  const double abs_err = 1e-10;
-  const double rel_err = 1e-10;
+  const double abs_err = 1e-12;
+  const double rel_err = 1e-12;
   const double points_per_sec = 10;
   const double dt = 1.0/points_per_sec;
   const int num_points = lrint(t_fin + 1);
