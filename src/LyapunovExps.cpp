@@ -192,7 +192,7 @@ int main(int argc, char const *argv[]) {
   std::cout << x[0] << "  " << x[1] << "  " << x[2] << "\n";
 
 
-  const double dt = 1e-3;
+  const double dt = 1e-12;
   typedef runge_kutta_fehlberg78<state_type> error_stepper_type;
   error_stepper_type stepper;
 
@@ -203,7 +203,7 @@ int main(int argc, char const *argv[]) {
 
   int num_steps;
   // transient steps to make sure system is on the attractor
-  num_steps = integrate_adaptive(make_controlled(1e-12, 1e-12, error_stepper_type()), pendulum_with_lyap(A), x, 0.0, 3000.0, dt);
+  num_steps = integrate_adaptive(make_controlled(1e-12, 1e-12, error_stepper_type()), pendulum_with_lyap(A), x, 0.0, 3000.5, dt);
 
   cout << "Finished transient steps \n";
   cout << "Integration steps: " << num_steps << "\n";
@@ -228,7 +228,7 @@ int main(int argc, char const *argv[]) {
   {
 
     t = integrate_n_steps(make_controlled(1e-12, 1e-12, error_stepper_type()),
-    pendulum_with_lyap(A) , x , t , dt , 100 ); // take 100 integration steps
+    pendulum_with_lyap(A) , x , t , 1e-3 , 100 ); // take 100 integration steps
 
     gram_schmidt< num_of_lyap >( x , lyap , n );
 	  if (count % 10000 == 0 && count > 1)
