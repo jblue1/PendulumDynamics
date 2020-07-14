@@ -113,8 +113,10 @@ int main(int argc, char const *argv[])
   times[0] = 0.0; // make sure to start from t=0
   for( size_t i=1 ; i<times.size() ; ++i )
   {
-    times[i] = i + 3000.5; //storing data at every half second starting after 3000 seconds
+    times[i] = (i-1) + 3000.5; //storing data at every half second starting after 3000 seconds
+
   }
+  std::cout << times[1] << "\n";
 
 
 
