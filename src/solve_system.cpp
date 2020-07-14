@@ -85,9 +85,9 @@ int main(int argc, char const *argv[]) {
   // define parameters for ODE solver
   const double abs_err = 1e-12;
   const double rel_err = 1e-12;
-  const double points_per_sec = 10;
+  const double points_per_sec = 100;
   const double dt = 1.0/points_per_sec;
-  const int num_points = lrint(t_fin + 1);
+  const int num_points = lrint(t_fin*points_per_sec + 1);
   const double init_step = 1e-12;
 
 
@@ -96,7 +96,7 @@ int main(int argc, char const *argv[]) {
   times[0] = 0.0;
   for( size_t i=1 ; i<times.size() ; ++i )
   {
-    times[i] = i + 3000.5; // storing data at every half second starting after 3000 seconds
+    times[i] = dt*(i-1) + 3000.0; // storing data at every half second starting after 3000 seconds
   }
 
   typedef runge_kutta_fehlberg78<state_type> error_stepper_type;
@@ -108,10 +108,11 @@ int main(int argc, char const *argv[]) {
   x[1] = theta_dot_init;
 
 
-  integrate_times(make_controlled( abs_err , rel_err , error_stepper_type() ),
+  int num_steps = integrate_times(make_controlled( abs_err , rel_err , error_stepper_type() ),
                   param_forced_pend(A, L, d, omega, b, m, k),
                   x , times, dt , streaming_observer_csv(write_data));
   write_data.close();
+  std::cout << num_steps << "\n";
 
 
   return 0;
