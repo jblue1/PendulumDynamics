@@ -4,6 +4,7 @@
 #include <fstream>
 #include <cmath>
 #include <filesystem>
+#include <mpi.h>
 #include "H5Cpp.h"
 #include "systems.hpp"
 
@@ -32,7 +33,8 @@ static void usage(std::ostream &out, const char* msg)
     out << "  time       - Time to simulate system\n";
     out << "  A_start    - starting driving amplitude\n";
     out << "  A_step     - driving amplitude stepsize\n";
-    out << "  num_steps  - number of A values\n";
+    out << "  num_steps  - number of A values (if you are using parallel processing\n";
+    out << "               this needs to be a multiple of the number of procceses)\n";
     exit(1);
 }
 
@@ -56,12 +58,23 @@ static void write_params(std::ostream &out, const double (&params)[14])
 
 
 
-int main(int argc, char const *argv[])
-
+int main(int argc, char *argv[])
 {
-  if (argc != 6) {
+
+  MPI_Init(&argc, &argv);
+  int num_procs;
+  int rank;
+  MPI_Comm_size(MPI_COMM_WORLD, &num_procs);
+  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+  std::cout << "Hello world from process " << rank + 1 << " of " << num_procs << "\n";
+
+if (rank == 0)
+{
+  if (argc != 6)
+  {
     usage(std::cerr, "Incorrect Number of parameters given.");
   }
+}
 
   // store command line arguments
   const std::string dir_name(argv[1]);
@@ -70,14 +83,6 @@ int main(int argc, char const *argv[])
   const double A_step = atof(argv[4]);
   const int num_steps = atoi(argv[5]);
 
-  // create directory to save data to
-  if (!fs::is_directory(dir_name) || !fs::exists(dir_name)) {
-    fs::create_directory(dir_name);
-  }
-
-  else {
-    usage(std::cerr, "Provide a path that does not lead to an existing directory or file");
-  }
 
   // define parameters for system
   const double L = g/pow(M_PI, 2);
@@ -91,7 +96,6 @@ int main(int argc, char const *argv[])
 
 
 
-
   // define parameters for ODE solver
   const double dt = 0.1;
   const double abs_err = 1e-10;
@@ -101,7 +105,16 @@ int main(int argc, char const *argv[])
 
   double solve_params[5] = {dt, abs_err, rel_err, trans_time, simul_time};
 
+if (rank == 0)
+{
+  // create directory to save data to
+  if (!fs::is_directory(dir_name) || !fs::exists(dir_name)) {
+    fs::create_directory(dir_name);
+  }
 
+  else {
+    usage(std::cerr, "Provide a path that does not lead to an existing directory or file");
+  }
   const double params[14] = {L, d, omega, b, m, k, A_start, A_step,
     double(num_steps), dt, abs_err, rel_err, trans_time, simul_time};
 
@@ -109,11 +122,8 @@ int main(int argc, char const *argv[])
   std::ofstream write_out(dir_name + "/params.txt");
   write_params(write_out, params);
   write_out.close();
+}
 
-
-  // Create HDF5 file
-  const H5std_string FILE_NAME(dir_name + "/data.h5");
-  H5File file(FILE_NAME, H5F_ACC_EXCL); // open will fail if file already exists
 
 
   // Constants needed to create dataspaces
@@ -125,9 +135,13 @@ int main(int argc, char const *argv[])
   const double step_theta = 2*M_PI/4.0;
   const double step_theta_dot = 6.0/4.0;
 
+  // Create HDF5 file
+  std::string rankstr = std::to_string(rank);
+  const H5std_string FILE_NAME(dir_name + "/rank" + rankstr + "data.h5");
+  H5File file(FILE_NAME, H5F_ACC_EXCL); // open will fail if file already exists
 
-
-  for (size_t i=0; i < num_steps; i++){
+  int interval = num_steps / num_procs;
+  for (size_t i=rank*interval; i < (rank+1)*interval; i++){
 
     A = (i)*A_step + A_start;
     pend_params[0] = A;
@@ -172,5 +186,6 @@ int main(int argc, char const *argv[])
       }
     }
   }
+  MPI_Finalize();
   return 0;
 }
