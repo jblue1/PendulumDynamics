@@ -100,7 +100,7 @@ if (rank == 0)
   const double dt = 0.1;
   const double abs_err = 1e-10;
   const double rel_err = 1e-10;
-  const double trans_time = 3000.5;
+  const double trans_time = 3000.0;
 
 
   double solve_params[5] = {dt, abs_err, rel_err, trans_time, simul_time};
@@ -132,16 +132,18 @@ if (rank == 0)
   const int RANK = 1;
   hsize_t dataspace_dims[1] = {DX};
 
-  const double step_theta = 2*M_PI/4.0;
+  const double step_theta = 2*M_PI/99.0;
   const double step_theta_dot = 6.0/4.0;
+
+  MPI_Barrier(MPI_COMM_WORLD);
 
   // Create HDF5 file
   std::string rankstr = std::to_string(rank);
-  const H5std_string FILE_NAME(dir_name + "/rank" + rankstr + "data.h5");
+  const H5std_string FILE_NAME(dir_name + "/proc" + rankstr + "data.h5");
   H5File file(FILE_NAME, H5F_ACC_EXCL); // open will fail if file already exists
 
   int interval = num_steps / num_procs;
-  for (size_t i=rank*interval; i < (rank+1)*interval; i++){
+  for (int i=rank*interval; i < (rank+1)*interval; i++){
 
     A = (i)*A_step + A_start;
     pend_params[0] = A;
@@ -153,8 +155,7 @@ if (rank == 0)
     // Create group inside file
     Group group(file.createGroup("/group" + istr));
     int count = 0;
-    for (size_t j=0; j<5; j++) {
-      std::cout << "j: " << j << "\n";
+    for (size_t j=0; j<100; j++) {
       for (size_t p=0; p<5; p++) {
 
         // create DataSpace
