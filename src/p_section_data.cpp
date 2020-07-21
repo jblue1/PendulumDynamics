@@ -6,7 +6,6 @@
 #include <filesystem>
 #include "H5Cpp.h"
 #include "systems.hpp"
-#include "streaming_observers.hpp"
 
 
 using namespace boost::numeric::odeint;
@@ -19,7 +18,7 @@ typedef std::vector<double> state_type;
 const double g = 9.81; //gravitational acceleration
 
 /**
- * Describe parameters taken and print errors if paramters are incorrectly
+ * Describe parameters taken and print errors if parameters are incorrectly
  * given.
  * @param out output stream for messages
  * @param msg Error message to print
@@ -28,7 +27,7 @@ static void usage(std::ostream &out, const char* msg)
 {
     out << msg << "\n" << "\n";
     out << "  Usage:\n";
-    out << "        solve_system file A\n";
+    out << "        solve_system dir time A_start A_step num_steps\n";
     out << "  dir        - path to directory to save file to\n";
     out << "  time       - Time to simulate system\n";
     out << "  A_start    - starting driving amplitude\n";
@@ -37,7 +36,7 @@ static void usage(std::ostream &out, const char* msg)
     exit(1);
 }
 
-static void write_params(std::ostream &out, const double (&params)[9])
+static void write_params(std::ostream &out, const double (&params)[14])
 {
   out << "L = " << params[0] << "\n";
   out << "d = " << params[1] << "\n";
@@ -48,11 +47,17 @@ static void write_params(std::ostream &out, const double (&params)[9])
   out << "A_start = " << params[6] << "\n";
   out << "A_step = " << params[7] << "\n";
   out << "num_steps = " << params[8] << "\n";
+  out << "dt = " << params[9] << "\n";
+  out << "abs_err = " << params[10] << "\n";
+  out << "rel_err = " << params[11] << "\n";
+  out << "trans_time = " << params[12] << "\n";
+  out << "simul_time = " << params[13] << "\n";
 }
 
 
 
 int main(int argc, char const *argv[])
+
 {
   if (argc != 6) {
     usage(std::cerr, "Incorrect Number of parameters given.");
@@ -60,7 +65,7 @@ int main(int argc, char const *argv[])
 
   // store command line arguments
   const std::string dir_name(argv[1]);
-  const double t_fin = atof(argv[2]);
+  const double simul_time = atof(argv[2]);
   const double A_start = atof(argv[3]);
   const double A_step = atof(argv[4]);
   const int num_steps = atoi(argv[5]);
@@ -81,20 +86,29 @@ int main(int argc, char const *argv[])
   const double b = 50.0;
   const double m = 0.1;
   const double k = 0.2;
-  const double params[9] = {L, d, omega, b, m, k, A_start, A_step, double(num_steps)};
+  double A = 0.0;
+  double pend_params[7] = {A, L, d, omega, b, m, k};
+
+
+
+
+  // define parameters for ODE solver
+  const double dt = 0.1;
+  const double abs_err = 1e-10;
+  const double rel_err = 1e-10;
+  const double trans_time = 3000.5;
+
+
+  double solve_params[5] = {dt, abs_err, rel_err, trans_time, simul_time};
+
+
+  const double params[14] = {L, d, omega, b, m, k, A_start, A_step,
+    double(num_steps), dt, abs_err, rel_err, trans_time, simul_time};
 
   //write parameters out to file
   std::ofstream write_out(dir_name + "/params.txt");
   write_params(write_out, params);
-
-  // define parameters for ODE solver
-  const double abs_err = 1e-12;
-  const double rel_err = 1e-12;
-  const double points_per_sec = 100.0;
-  const int num_points = lrint(abs(t_fin + 1));
-  const double init_step = 1e-12;
-  const double dt = 1/points_per_sec;
-
+  write_out.close();
 
 
   // Create HDF5 file
@@ -103,42 +117,30 @@ int main(int argc, char const *argv[])
 
 
   // Constants needed to create dataspaces
+  int num_points = (int) (simul_time) + 1;
   const hsize_t DX = 3*num_points;
   const int RANK = 1;
   hsize_t dataspace_dims[1] = {DX};
 
-
-  // create vector dictating the times at which we want solutions
-  std::vector<double> times(num_points);
-  times[0] = 0.0; // make sure to start from t=0
-  for( size_t i=1 ; i<times.size() ; ++i )
-  {
-    times[i] = (i-1) + 3000.5; //storing data at every half second starting after 3000 seconds
-
-  }
-  std::cout << times[1] << "\n";
-
-
-
-  typedef runge_kutta_fehlberg78<state_type> error_stepper_type;
-  error_stepper_type stepper;
-
-
-  double A;
-  const double step_theta = 2*M_PI/99;
+  const double step_theta = 2*M_PI/4.0;
   const double step_theta_dot = 6.0/4.0;
+
+
 
   for (size_t i=0; i < num_steps; i++){
 
     A = (i)*A_step + A_start;
+    pend_params[0] = A;
     std::cout << "A: " << A << "\n";
     std::string istr = std::to_string(i);
+
 
 
     // Create group inside file
     Group group(file.createGroup("/group" + istr));
     int count = 0;
-    for (size_t j=0; j<100; j++) {
+    for (size_t j=0; j<5; j++) {
+      std::cout << "j: " << j << "\n";
       for (size_t p=0; p<5; p++) {
 
         // create DataSpace
@@ -150,26 +152,25 @@ int main(int argc, char const *argv[])
         const H5std_string DATASET_NAME(dset);
         DataSet dataset = group.createDataSet(DATASET_NAME, PredType::NATIVE_DOUBLE, dataspace);
 
-        //instantiate state vector
-        state_type x(2);
-        x[0] = -M_PI + step_theta*j;
-        x[1] = -3 + step_theta_dot*p;
+        // instantiate pendulum object
+        param_forced_pend pend(pend_params);
+
+        // set initial state
+        pend.set_state(-M_PI + step_theta*j, -3 + step_theta_dot*p);
+
 
         //instantiate data array
         double *data = new double [3 * (num_points)];
-
-        integrate_times(make_controlled( abs_err , rel_err , error_stepper_type() ),
-                        param_forced_pend(A, L, d, omega, b, m, k),
-                        x , times, init_step , streaming_observer_h5(data, num_points));
-
+        pend.solve(solve_params, data);
 
         dataset.write(data, PredType::NATIVE_DOUBLE);
+        dataset.close();
         count++;
+
         //free memory of data array
         delete [] data;
       }
     }
   }
-
   return 0;
 }
