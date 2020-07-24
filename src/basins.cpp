@@ -50,8 +50,18 @@ static void write_params(std::ostream &out, const double (&params)[12]) {
 
 int main(int argc, char *argv[]) {
 
-  if (argc != 4) {
-    usage(std::cerr, "Incorrect Number of parameters given.");
+  MPI_Init(&argc, &argv);
+  int num_procs;
+  int rank;
+  MPI_Comm_size(MPI_COMM_WORLD, &num_procs);
+  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+  std::cout << "Hello world from process " << rank + 1 << " of " << num_procs
+            << "\n";
+
+  if (rank == 0) {
+    if (argc != 4) {
+      usage(std::cerr, "Incorrect Number of parameters given.");
+    }
   }
 
   // store command line arguments
@@ -74,22 +84,25 @@ int main(int argc, char *argv[]) {
   const double rel_err = 1e-10;
   const double trans_time = 5000.0;
 
-  // create directory for saving data
-  if (!fs::is_directory(dir_name) || !fs::exists(dir_name)) {
-    fs::create_directory(dir_name);
-  }
+  if (rank == 0) {
+    // create directory for saving data
+    if (!fs::is_directory(dir_name) || !fs::exists(dir_name)) {
+      fs::create_directory(dir_name);
+    }
 
-  else {
-    usage(std::cerr,
+    else {
+      usage(
+          std::cerr,
           "Provide a path that does not lead to an existing directory or file");
-  }
-  const double params[12] = {L, d,  omega,   b,       m,          k,
-                             A, dt, abs_err, rel_err, trans_time, simul_time};
+    }
+    const double params[12] = {L, d,  omega,   b,       m,          k,
+                               A, dt, abs_err, rel_err, trans_time, simul_time};
 
-  // write parameters out to file
-  std::ofstream write_out(dir_name + "/params.txt");
-  write_params(write_out, params);
-  write_out.close();
+    // write parameters out to file
+    std::ofstream write_out(dir_name + "/params.txt");
+    write_params(write_out, params);
+    write_out.close();
+  }
 
   // Constants needed to create dataspaces
   int num_points = (int)(simul_time) + 1;
@@ -97,20 +110,25 @@ int main(int argc, char *argv[]) {
   const int RANK = 1;
   hsize_t dataspace_dims[1] = {DX};
 
-  const double step_theta = 2 * M_PI / 103.0;
-  const double step_theta_dot = 6.0 / 99.0;
+  const double step_theta = 2 * M_PI / 999.0;
+  const double step_theta_dot = 6.0 / 999.0;
+
+  MPI_Barrier(MPI_COMM_WORLD);
+
+  int interval = 1000 / num_procs;
 
   // Create HDF5 file
-  const H5std_string FILE_NAME(dir_name + "/data.h5");
+  std::string rankstr = std::to_string(rank);
+  const H5std_string FILE_NAME(dir_name + "/proc" + rankstr + "data.h5");
   H5File file(FILE_NAME, H5F_ACC_EXCL); // open will fail if file already exists
   int count = 0;
-  for (size_t j = 0; j < 104; j++) {
+  for (size_t j = rank * interval; j < (rank + 1) * interval; j++) {
     std::cout << "\n";
     std::cout << "\n";
     std::cout << "j: " << j << "\n";
     std::cout << "\n";
     std::cout << "\n";
-    for (size_t p = 0; p < 100; p++) {
+    for (size_t p = 0; p < 1000; p++) {
       std::cout << "p: " << p << "\n";
 
       // create DataSpace
@@ -120,8 +138,8 @@ int main(int argc, char *argv[]) {
       std::string countstr = std::to_string(count);
       std::string dset = "dset" + countstr;
       const H5std_string DATASET_NAME(dset);
-      DataSet dataset = file.createDataSet(
-          DATASET_NAME, PredType::NATIVE_DOUBLE, dataspace);
+      DataSet dataset =
+          file.createDataSet(DATASET_NAME, PredType::NATIVE_DOUBLE, dataspace);
 
       // instantiate pendulum object
       param_forced_pend pend(pend_params);
@@ -143,8 +161,6 @@ int main(int argc, char *argv[]) {
       count++;
     }
   }
-
-
-
+  MPI_Finalize();
   return 0;
 }
