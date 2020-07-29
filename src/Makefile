@@ -20,5 +20,17 @@ basins.o : basins.cpp systems.hpp
 basins : systems.o basins.o
 	h5c++ $(CXXFLAGS) -o ../bin/basins $^
 
+LyapunovExps.o : LyapunovExps.cpp systems.hpp
+	$(CXX) $(CXXFLAGS) -c $<
+
+LyapunovExps : systems.o LyapunovExps.o
+	$(CXX) $(CXXFLAGS) -o ../bin/LyapunovExps $^
+
+continuation.o : continuation.cpp systems.hpp
+	$(CXX) $(CXXFLAGS) -c $<
+
+continuation : systems.o continuation.o
+	$(CXX) $(CXXFLAGS) -o ../bin/continuation $^
+
 clean:
 	rm *.o
