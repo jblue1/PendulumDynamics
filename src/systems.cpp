@@ -14,9 +14,7 @@ param_forced_pend::param_forced_pend(double *pend_params) {
   b = pend_params[4];
   m = pend_params[5];
   k = pend_params[6];
-
-  x.push_back(0.0);
-  x.push_back(0.0);
+  std::fill(x.begin(), x.end(), 0.0);
 }
 
 // implement streaming observers
@@ -108,6 +106,7 @@ double param_forced_pend::f(double t, double theta) {
  */
 void param_forced_pend::operator()(const state_type &x, state_type &dxdt,
                                    double t) {
+
   double z = cos(omega * t);
   dxdt[0] = x[1];
   dxdt[1] =
@@ -162,3 +161,145 @@ double param_forced_pend::solve(double dt, double abs_err, double rel_err,
                     streaming_observer_arr(data, dt, trans_time, simul_time));
   return x[0];
 }
+
+pendulum_lyap::pendulum_lyap(double pend_params[7])
+    : param_forced_pend(&pend_params[7]) {
+  A = pend_params[0];
+  L = pend_params[1];
+  d = pend_params[2];
+  omega = pend_params[3];
+  b = pend_params[4];
+  m = pend_params[5];
+  k = pend_params[6];
+  std::fill(x.begin(), x.end(), 0.0);
+  std::fill(lyap_exps.begin(), lyap_exps.end(), 0.0);
+}
+
+/**
+ * Helper function for the parametrically forced pendulum with external
+ * magnetic forcing. Calculates -0.5*r^2, where r is the distance between the
+ * pendulum bob and the magnet
+ */
+double pendulum_lyap::f(double theta, double phi) {
+  double z = cos(phi);
+  return -0.5 *
+         (pow(L, 2) + pow(d, 2) + pow((A * z), 2) + 2 * A * L * z * cos(theta) -
+          2 * A * d * z - 2 * d * L * cos(theta));
+}
+
+/**
+ * Helper function for calculating the jacobian
+ */
+double pendulum_lyap::df2dtheta(double theta, double phi) {
+  double z = cos(phi);
+  return -(cos(theta) / L) * (g - A * pow(omega, 2) * z +
+                              (b / m) * (A * z - d) * exp(f(theta, phi))) -
+         (b / (2 * m * L)) * pow(sin(theta), 2) * (2 * A * L * z - 2 * d * L) *
+             (A * z - d) * exp(f(theta, phi));
+}
+
+/**
+ * Helper function for calculating the jacobian
+ */
+double pendulum_lyap::df2dphi(double theta, double phi) {
+  return -(sin(theta) / L) *
+         (A * pow(omega, 2) * sin(phi) +
+          (b / m) * (-A * sin(phi) * exp(f(theta, phi)) +
+                     (A * cos(phi) - d) * exp(f(theta, phi)) *
+                         (pow(A, 2) * cos(phi) * sin(phi) +
+                          A * L * sin(phi) * cos(theta) - A * d * sin(phi))));
+}
+
+void pendulum_lyap::rhs(const state_type &x, state_type &dxdt, double t) {
+  double z = cos(omega * t);
+  dxdt[0] = x[1];
+  dxdt[1] =
+      -k * x[1] - (sin(x[0]) / L) * (g - A * z * pow(omega, 2) +
+                                     (b / m) * (A * z - d) * exp(f(t, x[0])));
+  dxdt[2] = omega;
+}
+
+/**
+ * Operator overload. Right hand side of equations of motion for the Pendulum
+ * (dxdt = f(x, t)).
+ */
+void pendulum_lyap::operator()(const state_type &x, state_type &dxdt,
+                               double t) {
+  double z = cos(omega * t);
+  dxdt[0] = x[1];
+  dxdt[1] = -k * x[1] -
+            (sin(x[0]) / L) * (g - A * z * pow(omega, 2) +
+                               (b / m) * (A * z - d) * exp(f(x[0], t * omega)));
+  dxdt[2] = omega;
+
+  for (size_t l = 0; l < num_lyap; ++l) {
+    const double *pert = x.begin() + 3 + l * 3;
+    double *dpert = dxdt.begin() + 3 + l * 3;
+
+    dpert[0] = pert[1];
+    dpert[1] = df2dtheta(x[0], x[2]) * pert[0] - k * pert[1] +
+               df2dphi(x[0], x[2]) * pert[2];
+    dpert[2] = 0;
+  }
+}
+
+void pendulum_lyap::set_state(double theta, double theta_dot, double phase) {
+  x[0] = theta;
+  x[1] = theta_dot;
+  x[2] = phase;
+}
+
+void pendulum_lyap::set_state(state_type state) { x = state; }
+
+/**
+ * Initialize orthonormal peterbation vectors
+ */
+void pendulum_lyap::init_pert_vecs() {
+  for (size_t i = 0; i < num_lyap; ++i) {
+    x[n + n * i + i] = 1.0; // initialize orthagonal displacement vectors
+  }
+}
+
+/**
+ * Numerically solve eqns of motion for the pendulum until t_fin
+ */
+double pendulum_lyap::solve(double dt, double abs_err, double rel_err,
+                            double t_fin) {
+  using namespace boost::numeric::odeint;
+  typedef runge_kutta_fehlberg78<state_type> stepper_type;
+  int num_steps = (int)(t_fin / dt);
+  auto stepper = make_controlled(abs_err, rel_err, stepper_type());
+  integrate_n_steps(stepper, boost::ref(*this), x, 0.0, dt, num_steps);
+  return x[0];
+}
+
+void pendulum_lyap::gram_schmidt() {
+  state_type::iterator start = x.begin() + n;
+  state_type::iterator vec1_beg = start, vec1_end = start + n;
+
+  double norm[num_lyap];
+  std::fill(norm, norm + num_lyap, 0.0);
+
+  norm[0] = sqrt(std::inner_product(vec1_beg, vec1_end, vec1_beg, 0.0));
+  normalize(vec1_beg, vec1_end, norm[0]);
+
+  lyap_exps[0] += log(norm[0]);
+
+  vec1_beg += n;
+  vec1_end += n;
+
+  for (int i = 1; i < num_lyap; i++, vec1_beg += n, vec1_end += n) {
+    for (int j = 0; j < i; j++) {
+      subtr_proj(vec1_beg, start + j * n);
+    }
+    norm[i] = sqrt(std::inner_product(vec1_beg, vec1_end, vec1_beg, 0.0));
+    lyap_exps[i] += log(norm[i]);
+    normalize(vec1_beg, vec1_end, norm[i]);
+  }
+}
+
+boost::array<double, 12> pendulum_lyap::get_state() { return x; }
+
+boost::array<double, 3> pendulum_lyap::get_exps() { return lyap_exps; }
+
+void pendulum_lyap::print_theta() { std::cout << "phase: " << x[2] << "\n"; }
