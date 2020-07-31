@@ -61,7 +61,7 @@ int main(int argc, char const *argv[]) {
   // store command line arguments
   const std::string dir_name(argv[1]);
   const double t_fin = atoi(argv[2]);
-  double A = atof(argv[3]);
+  double A_init = atof(argv[3]);
   const double A_step = atof(argv[4]);
   const int num_steps = atof(argv[5]);
   const double theta_init = atof(argv[6]);
@@ -74,7 +74,7 @@ int main(int argc, char const *argv[]) {
   const double b = 50.0;
   const double m = 0.1;
   const double k = 0.2;
-  double pend_params[7] = {A, L, d, omega, b, m, k};
+  double pend_params[7] = {A_init, L, d, omega, b, m, k};
 
   // define parameters for ODE solver
   const double dt = 0.1;
@@ -105,14 +105,23 @@ int main(int argc, char const *argv[]) {
 
   // set initial state
   pend.set_state(theta_init, theta_dot_init);
+  pend.print_state();
 
-  pend.solve(dt, abs_err, rel_err, 3000.0); // make sure on the attractor
+  std::ofstream write_predata(dir_name + "/predata.txt");
+  pend.solve(dt, abs_err, rel_err, 10000.0, write_predata); // make sure on the attractor
+  write_predata.close();
 
+  double A;
   for (int i=0; i<num_steps; i++) {
-    A += i*A_step;
+    A = A_init + i*A_step;
+    pend.print_state();
+    std::cout << "A: " << A << "\n";
     pend_params[0] = A;
+    pend.print_state();
     pend.set_pend_params(pend_params);
+    pend.print_state();
 
+    pend.solve(dt, abs_err, rel_err, 10000.0); // make sure on attractor
     std::string istr = std::to_string(i);
     std::ofstream write_data(dir_name + "/data" + istr + ".txt");
     pend.solve(dt, abs_err, rel_err, t_fin, write_data);
