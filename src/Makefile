@@ -1,5 +1,5 @@
 CXXFLAGS = -Wall  -I $(BOOST_ROOT) -std=c++17 -g -O2
-Systems : systems.cpp systems.hpp
+Systems.o : systems.cpp systems.hpp
 	$(CXX) $(CXXFLAGS) -c $<
 
 p_section_data.o : p_section_data.cpp systems.hpp
