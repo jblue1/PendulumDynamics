@@ -141,6 +141,10 @@ public:
    */
   double solve(double dt, double abs_err, double rel_err, double trans_time,
                double simul_time, double *data);
+
+  void print_state() {
+    std::cout << "theta: " << x[0] << "  theta_dot: " << x[1] << "\n";
+  }
 };
 
 class pendulum_lyap : public param_forced_pend {
@@ -156,7 +160,6 @@ class pendulum_lyap : public param_forced_pend {
   // containers for lyapunov exponents and state of the system
   lyap_type lyap_exps;
   state_type x;
-
 
 public:
   pendulum_lyap(double pend_params[7]); // constructor
