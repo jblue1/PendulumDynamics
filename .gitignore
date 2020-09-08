@@ -10,3 +10,5 @@ bin/
 data/
 
 *.DS_Store
+tests/.DS_Store
+test/systems-test
