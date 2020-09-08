@@ -31,7 +31,7 @@ void param_forced_pend::streaming_observer_txt::operator()(const state_type &x,
                                                            double t) {
   write_out << t;
   for (size_t i = 0; i < x.size(); i++) {
-    write_out << " " << x[i];
+    write_out << " " << std::setprecision(14) << x[i];
   }
   write_out << "\n";
 }
