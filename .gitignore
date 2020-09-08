@@ -3,7 +3,10 @@
 
 # jupyter notebook stuff
 .ipynb_checkpoints
+*.png
 
 # directories
 bin/
 data/
+
+*.DS_Store
