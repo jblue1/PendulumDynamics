@@ -1,5 +1,5 @@
 # PendulumDynamics
-This is a library used to simulate the motion of a parametrically driven pendulum with external forcing. See TREND_Poster.pdf for a summary of the work.
+This is a library used to simulate the motion of a parametrically driven pendulum with external forcing. See TREND_Poster.pdf for a summary of the work, and a talk describing the work [here](https://www.youtube.com/watch?v=Q2ii6TdU1bg).
 ### Tested on:
  - MacOS 10.15.4
  - Ubuntu 20.04 LTS
